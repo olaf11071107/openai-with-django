@@ -9,7 +9,7 @@ import openai
 from .models import ChatGptBot
 load_dotenv()
 from django.contrib.auth import authenticate, login
-from django.views.generic import CreateView, DeleteView, FormView
+from django.views.generic import CreateView, DeleteView, FormView, ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from .forms import SignUpForm, UserLoginForm
 from django.urls import reverse_lazy
@@ -28,52 +28,40 @@ client = OpenAI(
 
 
 
-def index(request):
-    #check if user is authenticated
-    if request.user.is_authenticated:
-        if request.method == 'POST':
-            #get user input from the form
-            user_input = request.POST.get('userInput')
-            #clean input from any white spaces
-            clean_user_input = str(user_input).strip()
-            #send request with user's prompt
-            try:
-                response = client.chat.completions.create(
+class HomeView(LoginRequiredMixin, ListView):
+    model = ChatGptBot
+    template_name = 'index.html'
+    context_object_name = 'get_history'
+
+    def get_queryset(self):
+        return ChatGptBot.objects.filter(user=self.request.user)
+
+    def post(self, request, *args, **kwargs):
+        user_input = request.POST.get('userInput')
+        clean_user_input = str(user_input).strip()
+        try:
+            response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                            {
-                                "role": "user",
-                                "content": clean_user_input,
-                            }
-                        ],
-                    )
-                #get response
-                
-                bot_response = response.choices[0].message.content
-                
-                obj, created = ChatGptBot.objects.get_or_create(
-                    user=request.user,
-                    messageInput=clean_user_input,
-                    bot_response=bot_response,
-                )
-            except openai.APIConnectionError as e:
-                #Handle connection error here
-                messages.warning(request, f"Failed to connect to OpenAI API, check your internet connection")
-            except openai.RateLimitError as e:
-                #Handle rate limit error (we recommend using exponential backoff)
-                messages.warning(request, f"You exceeded your current quota, please check your plan and billing details.")
-                messages.warning(request, f"If you are a developper change the API Key")
-                
+                    {
+                        "role": "user",
+                        "content": clean_user_input,
+                    }
+                ],
+            )
+            bot_response = response.choices[0].message.content
+            obj, created = ChatGptBot.objects.get_or_create(
+                user=request.user,
+                messageInput=clean_user_input,
+                bot_response=bot_response,
+            )
+        except openai.APIConnectionError as e:
+            messages.warning(request, f"Failed to connect to OpenAI API, check your internet connection")
+        except openai.RateLimitError as e:
+            messages.warning(request, f"You exceeded your current quota, please check your plan and billing details.")
+            messages.warning(request, f"If you are a developper change the API Key")
 
-            return redirect(request.META['HTTP_REFERER'])
-        else:
-            #retrieve all messages belong to logged in user
-            get_history = ChatGptBot.objects.filter(user=request.user)
-            context = {'get_history':get_history}
-            return render(request, 'index.html', context)
-    else:
-        return redirect("login")
-
+        return redirect(request.META['HTTP_REFERER'])
 
 
 
