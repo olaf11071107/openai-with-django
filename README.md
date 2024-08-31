@@ -35,7 +35,7 @@ If you're interested in exploring the possibilities of natural language generati
 
 Prerequisites:
 
-Python >=3.7.1 
+Python >=3.10 
 
 
 Git 
